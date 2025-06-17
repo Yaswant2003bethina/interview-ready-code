@@ -8,6 +8,7 @@ import tempfile
 import os
 import json
 import uuid
+import sys
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
@@ -99,78 +100,103 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Code execution functions
+# Fixed code execution functions
 def execute_python(code, input_data):
+    temp_file = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        # Create temporary file
+        fd, temp_file = tempfile.mkstemp(suffix='.py', text=True)
+        
+        # Write code to file and close file descriptor
+        with os.fdopen(fd, 'w') as f:
             f.write(code)
-            f.flush()
+        
+        # Execute the file
+        process = subprocess.run(
+            [sys.executable, temp_file],
+            input=input_data,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if process.returncode == 0:
+            return {'success': True, 'output': process.stdout.strip()}
+        else:
+            return {'success': False, 'error': process.stderr}
             
-            process = subprocess.run(
-                ['python', f.name],
-                input=input_data,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            os.unlink(f.name)
-            
-            if process.returncode == 0:
-                return {'success': True, 'output': process.stdout.strip()}
-            else:
-                return {'success': False, 'error': process.stderr}
-                
     except subprocess.TimeoutExpired:
         return {'success': False, 'error': 'Time Limit Exceeded'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+    finally:
+        # Clean up temporary file
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass  # File might already be deleted or locked
 
 def execute_javascript(code, input_data):
+    temp_file = None
     try:
         # Create a Node.js script that handles input
         node_code = f'''
 const readline = require('readline');
-const rl = readline.createInterface({{
-    input: process.stdin,
-    output: process.stdout
-}});
 
 let inputLines = `{input_data}`.trim().split('\\n');
 let currentLine = 0;
 
 function input() {{
-    return inputLines[currentLine++] || '';
+    if (currentLine < inputLines.length) {{
+        return inputLines[currentLine++];
+    }}
+    return '';
 }}
+
+// Make input available globally
+global.input = input;
 
 // User code
 {code}
 '''
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+        # Create temporary file
+        fd, temp_file = tempfile.mkstemp(suffix='.js', text=True)
+        
+        # Write code to file and close file descriptor
+        with os.fdopen(fd, 'w') as f:
             f.write(node_code)
-            f.flush()
+        
+        # Execute the file
+        process = subprocess.run(
+            ['node', temp_file],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if process.returncode == 0:
+            return {'success': True, 'output': process.stdout.strip()}
+        else:
+            return {'success': False, 'error': process.stderr}
             
-            process = subprocess.run(
-                ['node', f.name],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            os.unlink(f.name)
-            
-            if process.returncode == 0:
-                return {'success': True, 'output': process.stdout.strip()}
-            else:
-                return {'success': False, 'error': process.stderr}
-                
     except subprocess.TimeoutExpired:
         return {'success': False, 'error': 'Time Limit Exceeded'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+    finally:
+        # Clean up temporary file
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
 
 def execute_java(code, input_data):
+    temp_file = None
+    class_file = None
+    temp_dir = None
     try:
         # Extract class name from code
         import re
@@ -180,90 +206,117 @@ def execute_java(code, input_data):
         
         class_name = class_match.group(1)
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.java', delete=False) as f:
+        # Create temporary directory for Java files
+        temp_dir = tempfile.mkdtemp()
+        temp_file = os.path.join(temp_dir, f'{class_name}.java')
+        
+        # Write Java code to file
+        with open(temp_file, 'w') as f:
             f.write(code)
-            f.flush()
+        
+        # Compile
+        compile_process = subprocess.run(
+            ['javac', temp_file],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=temp_dir
+        )
+        
+        if compile_process.returncode != 0:
+            return {'success': False, 'error': compile_process.stderr}
+        
+        class_file = os.path.join(temp_dir, f'{class_name}.class')
+        
+        # Run
+        process = subprocess.run(
+            ['java', '-cp', temp_dir, class_name],
+            input=input_data,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if process.returncode == 0:
+            return {'success': True, 'output': process.stdout.strip()}
+        else:
+            return {'success': False, 'error': process.stderr}
             
-            # Compile
-            compile_process = subprocess.run(
-                ['javac', f.name],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if compile_process.returncode != 0:
-                os.unlink(f.name)
-                return {'success': False, 'error': compile_process.stderr}
-            
-            # Run
-            class_file = f.name.replace('.java', '.class')
-            process = subprocess.run(
-                ['java', '-cp', os.path.dirname(f.name), class_name],
-                input=input_data,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            # Cleanup
-            os.unlink(f.name)
-            if os.path.exists(class_file):
-                os.unlink(class_file)
-            
-            if process.returncode == 0:
-                return {'success': True, 'output': process.stdout.strip()}
-            else:
-                return {'success': False, 'error': process.stderr}
-                
     except subprocess.TimeoutExpired:
         return {'success': False, 'error': 'Time Limit Exceeded'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+    finally:
+        # Clean up temporary files and directory
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
+        if class_file and os.path.exists(class_file):
+            try:
+                os.unlink(class_file)
+            except OSError:
+                pass
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                os.rmdir(temp_dir)
+            except OSError:
+                pass
 
 def execute_cpp(code, input_data):
+    temp_file = None
+    exe_file = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
+        # Create temporary files
+        fd, temp_file = tempfile.mkstemp(suffix='.cpp', text=True)
+        exe_file = temp_file.replace('.cpp', '.exe')
+        
+        # Write code to file and close file descriptor
+        with os.fdopen(fd, 'w') as f:
             f.write(code)
-            f.flush()
+        
+        # Compile
+        compile_process = subprocess.run(
+            ['g++', temp_file, '-o', exe_file],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if compile_process.returncode != 0:
+            return {'success': False, 'error': compile_process.stderr}
+        
+        # Run
+        process = subprocess.run(
+            [exe_file],
+            input=input_data,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if process.returncode == 0:
+            return {'success': True, 'output': process.stdout.strip()}
+        else:
+            return {'success': False, 'error': process.stderr}
             
-            exe_file = f.name.replace('.cpp', '.exe')
-            
-            # Compile
-            compile_process = subprocess.run(
-                ['g++', f.name, '-o', exe_file],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if compile_process.returncode != 0:
-                os.unlink(f.name)
-                return {'success': False, 'error': compile_process.stderr}
-            
-            # Run
-            process = subprocess.run(
-                [exe_file],
-                input=input_data,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            # Cleanup
-            os.unlink(f.name)
-            if os.path.exists(exe_file):
-                os.unlink(exe_file)
-            
-            if process.returncode == 0:
-                return {'success': True, 'output': process.stdout.strip()}
-            else:
-                return {'success': False, 'error': process.stderr}
-                
     except subprocess.TimeoutExpired:
         return {'success': False, 'error': 'Time Limit Exceeded'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+    finally:
+        # Clean up temporary files
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
+        if exe_file and os.path.exists(exe_file):
+            try:
+                os.unlink(exe_file)
+            except OSError:
+                pass
 
 # Routes
 @app.route('/')
@@ -355,6 +408,8 @@ def student_dashboard():
     
     return render_template('student_dashboard.html', modules=modules)
 
+# ... keep existing code (user management routes)
+
 @app.route('/admin/users')
 def manage_users():
     if session.get('role') != 'admin':
@@ -444,6 +499,8 @@ def delete_user(user_id):
     
     return jsonify({'success': True, 'message': 'User deleted successfully'})
 
+# ... keep existing code (module management routes)
+
 @app.route('/admin/modules')
 def manage_modules():
     if session.get('role') != 'admin':
@@ -483,6 +540,8 @@ def add_module():
     conn.close()
     
     return jsonify({'success': True, 'message': 'Module added successfully'})
+
+# ... keep existing code (problem management routes)
 
 @app.route('/admin/problems')
 def manage_problems():
