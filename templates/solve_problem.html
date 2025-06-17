@@ -1,0 +1,83 @@
+
+{% extends "base.html" %}
+
+{% block title %}{{ problem[2] }} - Solve Problem{% endblock %}
+
+{% block content %}
+<div class="problem-solver">
+    <div class="problem-panel">
+        <div class="problem-header">
+            <h1>{{ problem[2] }}</h1>
+            <span class="difficulty-badge {{ problem[4].lower() }}">{{ problem[4] }}</span>
+        </div>
+        
+        <div class="problem-content">
+            <div class="problem-description">
+                <h3>Problem Description</h3>
+                <div class="description-text">{{ problem[3] | safe }}</div>
+            </div>
+            
+            {% if problem[5] and problem[6] %}
+            <div class="sample-section">
+                <div class="sample-input">
+                    <h4>Sample Input</h4>
+                    <pre>{{ problem[5] }}</pre>
+                </div>
+                <div class="sample-output">
+                    <h4>Sample Output</h4>
+                    <pre>{{ problem[6] }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="code-panel">
+        <div class="code-header">
+            <div class="language-selector">
+                <select id="languageSelect">
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                </select>
+            </div>
+            <div class="code-actions">
+                <button id="runBtn" class="btn btn-outline">
+                    <i class="fas fa-play"></i> Run
+                </button>
+                <button id="submitBtn" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Submit
+                </button>
+            </div>
+        </div>
+        
+        <div id="codeEditor" class="code-editor"></div>
+        
+        <div class="input-section">
+            <h4>Custom Input</h4>
+            <textarea id="customInput" placeholder="Enter your test input here..."></textarea>
+        </div>
+        
+        <div id="output" class="output-section">
+            <h4>Output</h4>
+            <div id="outputContent" class="output-content">
+                Run your code to see output here...
+            </div>
+        </div>
+        
+        <div id="results" class="results-section" style="display: none;">
+            <h4>Test Results</h4>
+            <div id="resultsContent" class="results-content"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const problemId = {{ problem[0] }};
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/solver.js') }}"></script>
+{% endblock %}

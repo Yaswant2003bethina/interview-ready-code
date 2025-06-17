@@ -1,0 +1,85 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage Test Cases - {{ problem[2] }}{% endblock %}
+
+{% block content %}
+<div class="management-container">
+    <div class="management-header">
+        <div>
+            <h1><i class="fas fa-list"></i> Test Cases</h1>
+            <p>Problem: {{ problem[2] }}</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddTestCaseModal()">
+            <i class="fas fa-plus"></i> Add Test Case
+        </button>
+    </div>
+    
+    <div class="test-cases-grid">
+        {% for test_case in test_cases %}
+        <div class="test-case-card">
+            <div class="test-case-header">
+                <h3>Test Case #{{ loop.index }}</h3>
+                {% if test_case[4] %}
+                <span class="hidden-badge">Hidden</span>
+                {% endif %}
+            </div>
+            <div class="test-case-content">
+                <div class="test-input">
+                    <label>Input:</label>
+                    <pre>{{ test_case[2] }}</pre>
+                </div>
+                <div class="test-output">
+                    <label>Expected Output:</label>
+                    <pre>{{ test_case[3] }}</pre>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if not test_cases %}
+        <div class="empty-state">
+            <i class="fas fa-list"></i>
+            <h3>No test cases added</h3>
+            <p>Add test cases to validate student solutions.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Test Case Modal -->
+<div id="addTestCaseModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Test Case</h2>
+            <span class="close" onclick="closeModal('addTestCaseModal')">&times;</span>
+        </div>
+        <form id="addTestCaseForm">
+            <input type="hidden" name="problem_id" value="{{ problem[0] }}">
+            <div class="form-group">
+                <label for="test_input">Input Data</label>
+                <textarea id="test_input" name="input_data" rows="4" required placeholder="Enter test input"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="test_output">Expected Output</label>
+                <textarea id="test_output" name="expected_output" rows="4" required placeholder="Enter expected output"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="is_hidden" name="is_hidden">
+                    <span class="checkmark"></span>
+                    Hidden test case
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addTestCaseModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Test Case</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testcases.js') }}"></script>
+{% endblock %}

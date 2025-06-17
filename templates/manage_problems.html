@@ -1,0 +1,102 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage Problems{% endblock %}
+
+{% block content %}
+<div class="management-container">
+    <div class="management-header">
+        <h1><i class="fas fa-puzzle-piece"></i> Manage Problems</h1>
+        <button class="btn btn-primary" onclick="openAddProblemModal()">
+            <i class="fas fa-plus"></i> Add Problem
+        </button>
+    </div>
+    
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Module</th>
+                    <th>Difficulty</th>
+                    <th>Test Cases</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for problem in problems %}
+                <tr>
+                    <td>{{ problem[2] }}</td>
+                    <td>{{ problem[8] }}</td>
+                    <td><span class="difficulty-badge {{ problem[4].lower() }}">{{ problem[4] }}</span></td>
+                    <td>{{ problem[9] }}</td>
+                    <td>{{ problem[7] }}</td>
+                    <td class="actions">
+                        <a href="{{ url_for('manage_test_cases', problem_id=problem[0]) }}" class="btn btn-sm btn-outline">
+                            <i class="fas fa-list"></i> Test Cases
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Problem Modal -->
+<div id="addProblemModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New Problem</h2>
+            <span class="close" onclick="closeModal('addProblemModal')">&times;</span>
+        </div>
+        <form id="addProblemForm">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="problem_title">Title</label>
+                    <input type="text" id="problem_title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="problem_module">Module</label>
+                    <select id="problem_module" name="module_id" required>
+                        {% for module in modules %}
+                        <option value="{{ module[0] }}">{{ module[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="problem_difficulty">Difficulty</label>
+                    <select id="problem_difficulty" name="difficulty" required>
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="problem_description">Description</label>
+                <textarea id="problem_description" name="description" rows="5" required></textarea>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="sample_input">Sample Input</label>
+                    <textarea id="sample_input" name="sample_input" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="sample_output">Sample Output</label>
+                    <textarea id="sample_output" name="sample_output" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addProblemModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Problem</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/problems.js') }}"></script>
+{% endblock %}

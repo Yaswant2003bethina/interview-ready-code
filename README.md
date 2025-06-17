@@ -1,73 +1,82 @@
-# Welcome to your Lovable project
 
-## Project info
+# Placement Coding Platform
 
-**URL**: https://lovable.dev/projects/62ec4196-60da-434e-9404-33f5af9dcdd5
+A comprehensive coding platform designed for placement preparation with admin management capabilities.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **Admin Dashboard**: Complete user and content management
+- **Module-based Organization**: Problems organized in modules
+- **Multi-language Support**: Python, JavaScript, Java, C++
+- **Real-time Code Execution**: Test code with custom inputs
+- **Automated Testing**: Test cases with pass/fail results
+- **User Management**: Admin can add, edit, and delete users
+- **Problem Management**: Create and manage coding problems
+- **Test Case Management**: Add and manage test cases for problems
 
-**Use Lovable**
+## Technology Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/62ec4196-60da-434e-9404-33f5af9dcdd5) and start prompting.
+- **Backend**: Flask (Python)
+- **Frontend**: HTML, CSS, JavaScript
+- **Database**: SQLite
+- **Code Editor**: Monaco Editor
+- **Styling**: Custom CSS with modern design
 
-Changes made via Lovable will be committed automatically to this repo.
+## Setup Instructions
 
-**Use your preferred IDE**
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. **Run the Application**:
+   ```bash
+   python app.py
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+3. **Access the Platform**:
+   - Open your browser and go to `http://localhost:5000`
+   - Default admin login: `admin` / `admin123`
 
-Follow these steps:
+## Usage
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Admin Features
+- **Dashboard**: View platform statistics
+- **User Management**: Add, edit, delete student accounts
+- **Module Management**: Create and organize problem modules
+- **Problem Management**: Add coding problems with descriptions
+- **Test Case Management**: Define input/output test cases
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Student Features
+- **Browse Modules**: View available problem modules
+- **Solve Problems**: Use the integrated code editor
+- **Multiple Languages**: Choose from Python, JavaScript, Java, C++
+- **Test Code**: Run code with custom inputs
+- **Submit Solutions**: Get automated feedback on test cases
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Code Execution
+The platform supports secure code execution for:
+- **Python**: Using subprocess with timeout
+- **JavaScript**: Node.js execution
+- **Java**: Compilation and execution with javac/java
+- **C++**: Compilation with g++ and execution
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+## Security Features
+- Session-based authentication
+- Input sanitization
+- Code execution timeout limits
+- Secure file handling
 
-**Edit a file directly in GitHub**
+## Database Schema
+- **Users**: Store user accounts and profiles
+- **Modules**: Organize problems into categories
+- **Problems**: Store problem statements and metadata
+- **Test Cases**: Input/output pairs for validation
+- **Submissions**: Track student code submissions
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Default Admin Account
+- Username: `admin`
+- Password: `admin123`
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/62ec4196-60da-434e-9404-33f5af9dcdd5) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Contributing
+This is an educational project designed for placement preparation. Feel free to extend and modify according to your needs.

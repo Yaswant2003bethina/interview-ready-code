@@ -1,0 +1,36 @@
+
+{% extends "base.html" %}
+
+{% block title %}{{ module[1] }} - Problems{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1><i class="fas fa-folder"></i> {{ module[1] }}</h1>
+        <p>{{ module[2] or 'Solve the problems below' }}</p>
+    </div>
+    
+    <div class="problems-grid">
+        {% for problem in problems %}
+        <div class="problem-card">
+            <div class="problem-header">
+                <h3>{{ problem[2] }}</h3>
+                <span class="difficulty-badge {{ problem[4].lower() }}">{{ problem[4] }}</span>
+            </div>
+            <p class="problem-description">{{ problem[3][:100] }}...</p>
+            <a href="{{ url_for('solve_problem', problem_id=problem[0]) }}" class="btn btn-primary">
+                Solve Problem <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        {% endfor %}
+        
+        {% if not problems %}
+        <div class="empty-state">
+            <i class="fas fa-puzzle-piece"></i>
+            <h3>No problems available</h3>
+            <p>Problems will appear here once added by administrators.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

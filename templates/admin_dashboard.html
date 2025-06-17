@@ -1,0 +1,77 @@
+
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1><i class="fas fa-tachometer-alt"></i> Admin Dashboard</h1>
+        <p>Manage your coding platform</p>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon students">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ total_students }}</h3>
+                <p>Total Students</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon modules">
+                <i class="fas fa-folder"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ total_modules }}</h3>
+                <p>Active Modules</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon problems">
+                <i class="fas fa-puzzle-piece"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ total_problems }}</h3>
+                <p>Total Problems</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon submissions">
+                <i class="fas fa-paper-plane"></i>
+            </div>
+            <div class="stat-content">
+                <h3>{{ total_submissions }}</h3>
+                <p>Submissions</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="admin-menu">
+        <div class="menu-grid">
+            <a href="{{ url_for('manage_users') }}" class="menu-card">
+                <i class="fas fa-users-cog"></i>
+                <h3>Manage Users</h3>
+                <p>Add, edit, and manage student accounts</p>
+            </a>
+            
+            <a href="{{ url_for('manage_modules') }}" class="menu-card">
+                <i class="fas fa-folder-plus"></i>
+                <h3>Manage Modules</h3>
+                <p>Organize problems into modules</p>
+            </a>
+            
+            <a href="{{ url_for('manage_problems') }}" class="menu-card">
+                <i class="fas fa-puzzle-piece"></i>
+                <h3>Manage Problems</h3>
+                <p>Create and edit coding problems</p>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

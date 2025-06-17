@@ -1,0 +1,60 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage Modules{% endblock %}
+
+{% block content %}
+<div class="management-container">
+    <div class="management-header">
+        <h1><i class="fas fa-folder-plus"></i> Manage Modules</h1>
+        <button class="btn btn-primary" onclick="openAddModuleModal()">
+            <i class="fas fa-plus"></i> Add Module
+        </button>
+    </div>
+    
+    <div class="modules-grid">
+        {% for module in modules %}
+        <div class="module-card">
+            <div class="module-header">
+                <h3><i class="fas fa-folder"></i> {{ module[1] }}</h3>
+                <span class="problem-count">{{ module[3] }} problems</span>
+            </div>
+            <p class="module-description">{{ module[2] or 'No description available' }}</p>
+            <div class="module-actions">
+                <a href="{{ url_for('manage_problems') }}?module={{ module[0] }}" class="btn btn-outline btn-sm">
+                    <i class="fas fa-puzzle-piece"></i> Manage Problems
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Add Module Modal -->
+<div id="addModuleModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New Module</h2>
+            <span class="close" onclick="closeModal('addModuleModal')">&times;</span>
+        </div>
+        <form id="addModuleForm">
+            <div class="form-group">
+                <label for="module_name">Module Name</label>
+                <input type="text" id="module_name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="module_description">Description</label>
+                <textarea id="module_description" name="description" rows="3"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addModuleModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Module</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/modules.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,43 @@
+
+{% extends "base.html" %}
+
+{% block title %}Login - Coding Platform{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="fas fa-code"></i>
+            <h1>Coding Platform</h1>
+            <p>Sign in to continue</p>
+        </div>
+        
+        <form method="POST" class="login-form">
+            <div class="form-group">
+                <label for="username">
+                    <i class="fas fa-user"></i>
+                    Username
+                </label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-lock"></i>
+                    Password
+                </label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-full">
+                <i class="fas fa-sign-in-alt"></i>
+                Sign In
+            </button>
+        </form>
+        
+        <div class="login-footer">
+            <p>Default Admin: admin / admin123</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
