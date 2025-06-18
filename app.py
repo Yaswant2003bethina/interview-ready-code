@@ -1,9 +1,11 @@
+
 import os
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 import subprocess
 import json
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -100,7 +102,7 @@ def create_admin_user():
     c.execute("SELECT * FROM users WHERE role = 'admin'")
     admin = c.fetchone()
     if not admin:
-        hashed_password = generate_password_hash('admin', method='sha256')
+        hashed_password = generate_password_hash('admin')
         c.execute("INSERT INTO users (full_name, email, password, role) VALUES (?, ?, ?, ?)",
                   ('Admin User', 'admin@example.com', hashed_password, 'admin'))
         conn.commit()
@@ -108,55 +110,109 @@ def create_admin_user():
     conn.close()
 
 # Function to execute code
-def execute_code(code, language, input):
+def execute_code(code, language, input_data):
     try:
         if language == 'python':
-            process = subprocess.Popen(['python3', '-c', code],
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(code)
+                temp_file = f.name
+            
+            try:
+                process = subprocess.Popen(['python', temp_file],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                output, error = process.communicate(input=input_data.encode('utf-8'), timeout=10)
+                return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
+            finally:
+                try:
+                    os.unlink(temp_file)
+                except OSError:
+                    pass
+                    
         elif language == 'javascript':
-            process = subprocess.Popen(['node', '-e', code],
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                f.write(code)
+                temp_file = f.name
+            
+            try:
+                process = subprocess.Popen(['node', temp_file],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                output, error = process.communicate(input=input_data.encode('utf-8'), timeout=10)
+                return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
+            finally:
+                try:
+                    os.unlink(temp_file)
+                except OSError:
+                    pass
+                    
         elif language == 'java':
-            # Save code to a file
-            with open('Test.java', 'w') as f:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.java', delete=False) as f:
                 f.write(code)
-            # Compile the code
-            compile_process = subprocess.Popen(['javac', 'Test.java'],
-                                               stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE)
-            compile_output, compile_error = compile_process.communicate()
-            if compile_error:
-                return {'output': '', 'error': compile_error.decode('utf-8')}
-            # Execute the compiled code
-            process = subprocess.Popen(['java', 'Test'],
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
+                temp_file = f.name
+            
+            try:
+                # Compile the code
+                compile_process = subprocess.Popen(['javac', temp_file],
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+                compile_output, compile_error = compile_process.communicate(timeout=10)
+                if compile_error:
+                    return {'output': '', 'error': compile_error.decode('utf-8')}
+                
+                # Execute the compiled code
+                class_name = os.path.splitext(os.path.basename(temp_file))[0]
+                process = subprocess.Popen(['java', '-cp', os.path.dirname(temp_file), class_name],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                output, error = process.communicate(input=input_data.encode('utf-8'), timeout=10)
+                return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
+            finally:
+                try:
+                    os.unlink(temp_file)
+                    class_file = temp_file.replace('.java', '.class')
+                    if os.path.exists(class_file):
+                        os.unlink(class_file)
+                except OSError:
+                    pass
+                    
         elif language == 'cpp':
-            # Save code to a file
-            with open('test.cpp', 'w') as f:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.cpp', delete=False) as f:
                 f.write(code)
-            # Compile the code
-            compile_process = subprocess.Popen(['g++', 'test.cpp', '-o', 'test'],
-                                               stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE)
-            compile_output, compile_error = compile_process.communicate()
-            if compile_error:
-                return {'output': '', 'error': compile_error.decode('utf-8')}
-            # Execute the compiled code
-            process = subprocess.Popen(['./test'],
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
+                temp_file = f.name
+            
+            try:
+                # Compile the code
+                exe_file = temp_file.replace('.cpp', '.exe') if os.name == 'nt' else temp_file.replace('.cpp', '')
+                compile_process = subprocess.Popen(['g++', temp_file, '-o', exe_file],
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE)
+                compile_output, compile_error = compile_process.communicate(timeout=10)
+                if compile_error:
+                    return {'output': '', 'error': compile_error.decode('utf-8')}
+                
+                # Execute the compiled code
+                process = subprocess.Popen([exe_file],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                output, error = process.communicate(input=input_data.encode('utf-8'), timeout=10)
+                return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
+            finally:
+                try:
+                    os.unlink(temp_file)
+                    if os.path.exists(exe_file):
+                        os.unlink(exe_file)
+                except OSError:
+                    pass
         else:
             return {'output': '', 'error': 'Unsupported language'}
 
-        output, error = process.communicate(input=input.encode('utf-8'))
-        return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
+    except subprocess.TimeoutExpired:
+        return {'output': '', 'error': 'Code execution timeout'}
     except Exception as e:
         return {'output': '', 'error': str(e)}
 
@@ -204,7 +260,7 @@ def register():
         full_name = request.form['full_name']
         email = request.form['email']
         password = request.form['password']
-        hashed_password = generate_password_hash(password, method='sha256')
+        hashed_password = generate_password_hash(password)
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
         try:
@@ -218,6 +274,8 @@ def register():
         finally:
             conn.close()
     return render_template('register.html')
+
+# ... keep existing code (all other routes and functions remain the same)
 
 @app.route('/admin_dashboard')
 def admin_dashboard():
