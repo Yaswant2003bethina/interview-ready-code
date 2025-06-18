@@ -1,4 +1,3 @@
-
 import os
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -102,11 +101,11 @@ def create_admin_user():
     c.execute("SELECT * FROM users WHERE role = 'admin'")
     admin = c.fetchone()
     if not admin:
-        hashed_password = generate_password_hash('admin')
+        hashed_password = generate_password_hash('admin123')
         c.execute("INSERT INTO users (full_name, email, password, role) VALUES (?, ?, ?, ?)",
                   ('Admin User', 'admin@example.com', hashed_password, 'admin'))
         conn.commit()
-        print('Admin user created.')
+        print('Admin user created with username: admin, password: admin123')
     conn.close()
 
 # Function to execute code
@@ -224,11 +223,15 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
+        username = request.form['username']
         password = request.form['password']
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email = ?", (email,))
+        # Check if username matches email or could be a username (for admin case)
+        if username == 'admin':
+            c.execute("SELECT * FROM users WHERE email = ?", ('admin@example.com',))
+        else:
+            c.execute("SELECT * FROM users WHERE email = ?", (username,))
         user = c.fetchone()
         conn.close()
 
@@ -242,7 +245,7 @@ def login():
             else:
                 return redirect(url_for('student_dashboard'))
         else:
-            flash('Invalid email or password', 'error')
+            flash('Invalid username or password', 'error')
             return render_template('login.html')
     return render_template('login.html')
 
