@@ -1,0 +1,87 @@
+
+{% extends "base.html" %}
+
+{% block title %}MCQ Practice{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1><i class="fas fa-question-circle"></i> MCQ Practice</h1>
+        <p>Test your knowledge with multiple choice questions</p>
+    </div>
+    
+    <div class="mcq-filters">
+        <div class="filter-group">
+            <label for="moduleFilter">Filter by Module:</label>
+            <select id="moduleFilter" onchange="filterMCQs()">
+                <option value="">All Modules</option>
+                {% for module in modules %}
+                <option value="{{ module[0] }}">{{ module[1] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="difficultyFilter">Filter by Difficulty:</label>
+            <select id="difficultyFilter" onchange="filterMCQs()">
+                <option value="">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+            </select>
+        </div>
+    </div>
+    
+    <div id="mcqContainer" class="mcq-container">
+        {% for mcq in mcqs %}
+        <div class="mcq-card" data-module="{{ mcq[5] or '' }}" data-difficulty="{{ mcq[6] }}">
+            <div class="mcq-header">
+                <span class="difficulty-badge {{ mcq[6].lower() }}">{{ mcq[6] }}</span>
+                {% if mcq[7] %}
+                <span class="module-badge">{{ mcq[7] }}</span>
+                {% endif %}
+            </div>
+            <div class="mcq-question">
+                <h3>{{ mcq[1] }}</h3>
+            </div>
+            <div class="mcq-options">
+                <div class="option" onclick="selectOption(this, 'A', {{ mcq[0] }})">
+                    <span class="option-label">A)</span> {{ mcq[2] }}
+                </div>
+                <div class="option" onclick="selectOption(this, 'B', {{ mcq[0] }})">
+                    <span class="option-label">B)</span> {{ mcq[3] }}
+                </div>
+                <div class="option" onclick="selectOption(this, 'C', {{ mcq[0] }})">
+                    <span class="option-label">C)</span> {{ mcq[4] }}
+                </div>
+                <div class="option" onclick="selectOption(this, 'D', {{ mcq[0] }})">
+                    <span class="option-label">D)</span> {{ mcq[5] }}
+                </div>
+            </div>
+            <div class="mcq-actions">
+                <button class="btn btn-primary" onclick="submitAnswer({{ mcq[0] }})">Submit Answer</button>
+                <button class="btn btn-outline" onclick="showExplanation({{ mcq[0] }})" style="display: none;">Show Explanation</button>
+            </div>
+            <div class="mcq-result" id="result-{{ mcq[0] }}" style="display: none;"></div>
+            {% if mcq[8] %}
+            <div class="mcq-explanation" id="explanation-{{ mcq[0] }}" style="display: none;">
+                <h4>Explanation:</h4>
+                <p>{{ mcq[8] }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if not mcqs %}
+    <div class="empty-state">
+        <i class="fas fa-question-circle"></i>
+        <h3>No MCQs available</h3>
+        <p>Contact your administrator to add MCQ questions.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/student_mcqs.js') }}"></script>
+{% endblock %}

@@ -1,771 +1,683 @@
-
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
-import sqlite3
-import subprocess
-import tempfile
 import os
+import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+import subprocess
 import json
-import uuid
-import sys
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this'
+app.secret_key = os.urandom(24)
 
-# Database initialization
+DATABASE = 'database.db'
+
+# Function to initialize the database
 def init_db():
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
     # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'student',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT 1
-        )
-    ''')
-    
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  full_name TEXT NOT NULL,
+                  email TEXT NOT NULL UNIQUE,
+                  password TEXT NOT NULL,
+                  role TEXT NOT NULL DEFAULT 'student',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
     # Modules table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS modules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT 1
-        )
-    ''')
-    
+    c.execute('''CREATE TABLE IF NOT EXISTS modules
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  description TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
     # Problems table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS problems (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            module_id INTEGER,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            difficulty TEXT NOT NULL,
-            sample_input TEXT,
-            sample_output TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT 1,
-            FOREIGN KEY (module_id) REFERENCES modules (id)
-        )
-    ''')
-    
+    c.execute('''CREATE TABLE IF NOT EXISTS problems
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  module_id INTEGER NOT NULL,
+                  title TEXT NOT NULL,
+                  description TEXT NOT NULL,
+                  difficulty TEXT NOT NULL,
+                  sample_input TEXT,
+                  sample_output TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (module_id) REFERENCES modules (id))''')
+
     # Test cases table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS test_cases (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            problem_id INTEGER,
-            input_data TEXT NOT NULL,
-            expected_output TEXT NOT NULL,
-            is_hidden BOOLEAN DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (problem_id) REFERENCES problems (id)
-        )
-    ''')
-    
+    c.execute('''CREATE TABLE IF NOT EXISTS test_cases
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  problem_id INTEGER NOT NULL,
+                  input TEXT NOT NULL,
+                  expected_output TEXT NOT NULL,
+                  hidden BOOLEAN NOT NULL DEFAULT 0,
+                  FOREIGN KEY (problem_id) REFERENCES problems (id))''')
+
     # Submissions table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            problem_id INTEGER,
-            code TEXT NOT NULL,
-            language TEXT NOT NULL,
-            status TEXT,
-            test_results TEXT,
-            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id),
-            FOREIGN KEY (problem_id) REFERENCES problems (id)
-        )
-    ''')
+    c.execute('''CREATE TABLE IF NOT EXISTS submissions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  problem_id INTEGER NOT NULL,
+                  code TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  score INTEGER NOT NULL,
+                  submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id),
+                  FOREIGN KEY (problem_id) REFERENCES problems (id))''')
     
-    # Create default admin user
-    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "admin"')
-    if cursor.fetchone()[0] == 0:
-        admin_hash = generate_password_hash('admin123')
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, role)
-            VALUES (?, ?, ?, ?, ?)
-        ''', ('admin', 'admin@coding.platform', admin_hash, 'System Administrator', 'admin'))
+    # MCQs table
+    c.execute('''CREATE TABLE IF NOT EXISTS mcqs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  question TEXT NOT NULL,
+                  option_a TEXT NOT NULL,
+                  option_b TEXT NOT NULL,
+                  option_c TEXT NOT NULL,
+                  option_d TEXT NOT NULL,
+                  correct_answer TEXT NOT NULL,
+                  difficulty TEXT NOT NULL,
+                  module_id INTEGER,
+                  explanation TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (module_id) REFERENCES modules (id))''')
     
+    # MCQ submissions table
+    c.execute('''CREATE TABLE IF NOT EXISTS mcq_submissions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  mcq_id INTEGER NOT NULL,
+                  selected_answer TEXT NOT NULL,
+                  is_correct BOOLEAN NOT NULL,
+                  submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id),
+                  FOREIGN KEY (mcq_id) REFERENCES mcqs (id))''')
+
     conn.commit()
     conn.close()
 
-# Fixed code execution functions
-def execute_python(code, input_data):
-    temp_file = None
+# Function to create an admin user if none exists
+def create_admin_user():
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE role = 'admin'")
+    admin = c.fetchone()
+    if not admin:
+        hashed_password = generate_password_hash('admin', method='sha256')
+        c.execute("INSERT INTO users (full_name, email, password, role) VALUES (?, ?, ?, ?)",
+                  ('Admin User', 'admin@example.com', hashed_password, 'admin'))
+        conn.commit()
+        print('Admin user created.')
+    conn.close()
+
+# Function to execute code
+def execute_code(code, language, input):
     try:
-        # Create temporary file
-        fd, temp_file = tempfile.mkstemp(suffix='.py', text=True)
-        
-        # Write code to file and close file descriptor
-        with os.fdopen(fd, 'w') as f:
-            f.write(code)
-        
-        # Execute the file
-        process = subprocess.run(
-            [sys.executable, temp_file],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        if process.returncode == 0:
-            return {'success': True, 'output': process.stdout.strip()}
+        if language == 'python':
+            process = subprocess.Popen(['python3', '-c', code],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+        elif language == 'javascript':
+            process = subprocess.Popen(['node', '-e', code],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+        elif language == 'java':
+            # Save code to a file
+            with open('Test.java', 'w') as f:
+                f.write(code)
+            # Compile the code
+            compile_process = subprocess.Popen(['javac', 'Test.java'],
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE)
+            compile_output, compile_error = compile_process.communicate()
+            if compile_error:
+                return {'output': '', 'error': compile_error.decode('utf-8')}
+            # Execute the compiled code
+            process = subprocess.Popen(['java', 'Test'],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+        elif language == 'cpp':
+            # Save code to a file
+            with open('test.cpp', 'w') as f:
+                f.write(code)
+            # Compile the code
+            compile_process = subprocess.Popen(['g++', 'test.cpp', '-o', 'test'],
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE)
+            compile_output, compile_error = compile_process.communicate()
+            if compile_error:
+                return {'output': '', 'error': compile_error.decode('utf-8')}
+            # Execute the compiled code
+            process = subprocess.Popen(['./test'],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
         else:
-            return {'success': False, 'error': process.stderr}
-            
-    except subprocess.TimeoutExpired:
-        return {'success': False, 'error': 'Time Limit Exceeded'}
+            return {'output': '', 'error': 'Unsupported language'}
+
+        output, error = process.communicate(input=input.encode('utf-8'))
+        return {'output': output.decode('utf-8'), 'error': error.decode('utf-8')}
     except Exception as e:
-        return {'success': False, 'error': str(e)}
-    finally:
-        # Clean up temporary file
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.unlink(temp_file)
-            except OSError:
-                pass  # File might already be deleted or locked
-
-def execute_javascript(code, input_data):
-    temp_file = None
-    try:
-        # Create a Node.js script that handles input
-        node_code = f'''
-const readline = require('readline');
-
-let inputLines = `{input_data}`.trim().split('\\n');
-let currentLine = 0;
-
-function input() {{
-    if (currentLine < inputLines.length) {{
-        return inputLines[currentLine++];
-    }}
-    return '';
-}}
-
-// Make input available globally
-global.input = input;
-
-// User code
-{code}
-'''
-        
-        # Create temporary file
-        fd, temp_file = tempfile.mkstemp(suffix='.js', text=True)
-        
-        # Write code to file and close file descriptor
-        with os.fdopen(fd, 'w') as f:
-            f.write(node_code)
-        
-        # Execute the file
-        process = subprocess.run(
-            ['node', temp_file],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        if process.returncode == 0:
-            return {'success': True, 'output': process.stdout.strip()}
-        else:
-            return {'success': False, 'error': process.stderr}
-            
-    except subprocess.TimeoutExpired:
-        return {'success': False, 'error': 'Time Limit Exceeded'}
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-    finally:
-        # Clean up temporary file
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.unlink(temp_file)
-            except OSError:
-                pass
-
-def execute_java(code, input_data):
-    temp_file = None
-    class_file = None
-    temp_dir = None
-    try:
-        # Extract class name from code
-        import re
-        class_match = re.search(r'public\s+class\s+(\w+)', code)
-        if not class_match:
-            return {'success': False, 'error': 'No public class found'}
-        
-        class_name = class_match.group(1)
-        
-        # Create temporary directory for Java files
-        temp_dir = tempfile.mkdtemp()
-        temp_file = os.path.join(temp_dir, f'{class_name}.java')
-        
-        # Write Java code to file
-        with open(temp_file, 'w') as f:
-            f.write(code)
-        
-        # Compile
-        compile_process = subprocess.run(
-            ['javac', temp_file],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            cwd=temp_dir
-        )
-        
-        if compile_process.returncode != 0:
-            return {'success': False, 'error': compile_process.stderr}
-        
-        class_file = os.path.join(temp_dir, f'{class_name}.class')
-        
-        # Run
-        process = subprocess.run(
-            ['java', '-cp', temp_dir, class_name],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        if process.returncode == 0:
-            return {'success': True, 'output': process.stdout.strip()}
-        else:
-            return {'success': False, 'error': process.stderr}
-            
-    except subprocess.TimeoutExpired:
-        return {'success': False, 'error': 'Time Limit Exceeded'}
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-    finally:
-        # Clean up temporary files and directory
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.unlink(temp_file)
-            except OSError:
-                pass
-        if class_file and os.path.exists(class_file):
-            try:
-                os.unlink(class_file)
-            except OSError:
-                pass
-        if temp_dir and os.path.exists(temp_dir):
-            try:
-                os.rmdir(temp_dir)
-            except OSError:
-                pass
-
-def execute_cpp(code, input_data):
-    temp_file = None
-    exe_file = None
-    try:
-        # Create temporary files
-        fd, temp_file = tempfile.mkstemp(suffix='.cpp', text=True)
-        exe_file = temp_file.replace('.cpp', '.exe')
-        
-        # Write code to file and close file descriptor
-        with os.fdopen(fd, 'w') as f:
-            f.write(code)
-        
-        # Compile
-        compile_process = subprocess.run(
-            ['g++', temp_file, '-o', exe_file],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if compile_process.returncode != 0:
-            return {'success': False, 'error': compile_process.stderr}
-        
-        # Run
-        process = subprocess.run(
-            [exe_file],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        if process.returncode == 0:
-            return {'success': True, 'output': process.stdout.strip()}
-        else:
-            return {'success': False, 'error': process.stderr}
-            
-    except subprocess.TimeoutExpired:
-        return {'success': False, 'error': 'Time Limit Exceeded'}
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-    finally:
-        # Clean up temporary files
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.unlink(temp_file)
-            except OSError:
-                pass
-        if exe_file and os.path.exists(exe_file):
-            try:
-                os.unlink(exe_file)
-            except OSError:
-                pass
+        return {'output': '', 'error': str(e)}
 
 # Routes
 @app.route('/')
 def index():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    if session.get('role') == 'admin':
-        return redirect(url_for('admin_dashboard'))
-    else:
-        return redirect(url_for('student_dashboard'))
+    return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
-        
-        conn = sqlite3.connect('coding_platform.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ? AND is_active = 1', (username,))
-        user = cursor.fetchone()
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE email = ?", (email,))
+        user = c.fetchone()
         conn.close()
-        
+
         if user and check_password_hash(user[3], password):
             session['user_id'] = user[0]
-            session['username'] = user[1]
-            session['role'] = user[5]
-            session['full_name'] = user[4]
-            return redirect(url_for('index'))
+            session['full_name'] = user[1]
+            session['email'] = user[2]
+            session['role'] = user[4]
+            if user[4] == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('student_dashboard'))
         else:
-            flash('Invalid credentials', 'error')
-    
+            flash('Invalid email or password', 'error')
+            return render_template('login.html')
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    session.clear()
+    session.pop('user_id', None)
+    session.pop('full_name', None)
+    session.pop('email', None)
+    session.pop('role', None)
     return redirect(url_for('login'))
 
-@app.route('/admin')
-def admin_dashboard():
-    if session.get('role') != 'admin':
-        return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    # Get statistics
-    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "student" AND is_active = 1')
-    total_students = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM modules WHERE is_active = 1')
-    total_modules = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM problems WHERE is_active = 1')
-    total_problems = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM submissions')
-    total_submissions = cursor.fetchone()[0]
-    
-    conn.close()
-    
-    return render_template('admin_dashboard.html', 
-                         total_students=total_students,
-                         total_modules=total_modules,
-                         total_problems=total_problems,
-                         total_submissions=total_submissions)
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        full_name = request.form['full_name']
+        email = request.form['email']
+        password = request.form['password']
+        hashed_password = generate_password_hash(password, method='sha256')
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        try:
+            c.execute("INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)",
+                      (full_name, email, hashed_password))
+            conn.commit()
+            flash('Registration successful. Please log in.', 'success')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Email address already registered.', 'error')
+        finally:
+            conn.close()
+    return render_template('register.html')
 
-@app.route('/student')
-def student_dashboard():
-    if session.get('role') != 'student':
+@app.route('/admin_dashboard')
+def admin_dashboard():
+    if 'user_id' not in session or session['role'] != 'admin':
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    # Get modules with problems
-    cursor.execute('''
-        SELECT m.id, m.name, m.description, COUNT(p.id) as problem_count
-        FROM modules m
-        LEFT JOIN problems p ON m.id = p.module_id AND p.is_active = 1
-        WHERE m.is_active = 1
-        GROUP BY m.id, m.name, m.description
-    ''')
-    modules = cursor.fetchall()
-    
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users WHERE role = 'student'")
+    total_students = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM modules")
+    total_modules = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM problems")
+    total_problems = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM submissions")
+    total_submissions = c.fetchone()[0]
     conn.close()
-    
+    return render_template('admin_dashboard.html', total_students=total_students,
+                           total_modules=total_modules, total_problems=total_problems,
+                           total_submissions=total_submissions)
+
+@app.route('/student_dashboard')
+def student_dashboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT id, name, description, (SELECT COUNT(*) FROM problems WHERE module_id = modules.id) AS problem_count FROM modules ORDER BY name")
+    modules = c.fetchall()
+    conn.close()
     return render_template('student_dashboard.html', modules=modules)
 
-# ... keep existing code (user management routes)
-
-@app.route('/admin/users')
+@app.route('/manage_users')
 def manage_users():
-    if session.get('role') != 'admin':
+    if 'user_id' not in session or session['role'] != 'admin':
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE is_active = 1 ORDER BY created_at DESC')
-    users = cursor.fetchall()
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE role = 'student' ORDER BY full_name")
+    students = c.fetchall()
     conn.close()
-    
-    return render_template('manage_users.html', users=users)
+    return render_template('manage_users.html', students=students)
 
-@app.route('/admin/users/add', methods=['POST'])
-def add_user():
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-    full_name = data.get('full_name')
-    role = data.get('role', 'student')
-    
-    if not all([username, email, password, full_name]):
-        return jsonify({'success': False, 'message': 'All fields are required'})
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    try:
-        password_hash = generate_password_hash(password)
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, full_name, role)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (username, email, password_hash, full_name, role))
-        conn.commit()
-        return jsonify({'success': True, 'message': 'User added successfully'})
-    except sqlite3.IntegrityError:
-        return jsonify({'success': False, 'message': 'Username or email already exists'})
-    finally:
-        conn.close()
-
-@app.route('/admin/users/<int:user_id>/edit', methods=['POST'])
-def edit_user(user_id):
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    try:
-        if data.get('password'):
-            password_hash = generate_password_hash(data['password'])
-            cursor.execute('''
-                UPDATE users 
-                SET username = ?, email = ?, password_hash = ?, full_name = ?, role = ?
-                WHERE id = ?
-            ''', (data['username'], data['email'], password_hash, data['full_name'], data['role'], user_id))
-        else:
-            cursor.execute('''
-                UPDATE users 
-                SET username = ?, email = ?, full_name = ?, role = ?
-                WHERE id = ?
-            ''', (data['username'], data['email'], data['full_name'], data['role'], user_id))
-        
-        conn.commit()
-        return jsonify({'success': True, 'message': 'User updated successfully'})
-    except sqlite3.IntegrityError:
-        return jsonify({'success': False, 'message': 'Username or email already exists'})
-    finally:
-        conn.close()
-
-@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
-def delete_user(user_id):
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('UPDATE users SET is_active = 0 WHERE id = ?', (user_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'User deleted successfully'})
-
-# ... keep existing code (module management routes)
-
-@app.route('/admin/modules')
+@app.route('/manage_modules', methods=['GET', 'POST'])
 def manage_modules():
-    if session.get('role') != 'admin':
+    if 'user_id' not in session or session['role'] != 'admin':
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT m.*, COUNT(p.id) as problem_count
-        FROM modules m
-        LEFT JOIN problems p ON m.id = p.module_id AND p.is_active = 1
-        WHERE m.is_active = 1
-        GROUP BY m.id
-        ORDER BY m.created_at DESC
-    ''')
-    modules = cursor.fetchall()
+
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        name = request.form['name']
+        description = request.form.get('description', '')
+        c.execute("INSERT INTO modules (name, description) VALUES (?, ?)", (name, description))
+        conn.commit()
+        flash('Module added successfully', 'success')
+        return redirect(url_for('manage_modules'))
+
+    c.execute("SELECT id, name, description, (SELECT COUNT(*) FROM problems WHERE module_id = modules.id) AS problem_count FROM modules ORDER BY name")
+    modules = c.fetchall()
     conn.close()
-    
     return render_template('manage_modules.html', modules=modules)
 
-@app.route('/admin/modules/add', methods=['POST'])
-def add_module():
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    name = data.get('name')
-    description = data.get('description', '')
-    
-    if not name:
-        return jsonify({'success': False, 'message': 'Module name is required'})
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO modules (name, description) VALUES (?, ?)', (name, description))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Module added successfully'})
-
-# ... keep existing code (problem management routes)
-
-@app.route('/admin/problems')
+@app.route('/manage_problems', methods=['GET', 'POST'])
 def manage_problems():
-    if session.get('role') != 'admin':
+    if 'user_id' not in session or session['role'] != 'admin':
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT p.*, m.name as module_name, COUNT(t.id) as test_case_count
-        FROM problems p
-        LEFT JOIN modules m ON p.module_id = m.id
-        LEFT JOIN test_cases t ON p.id = t.problem_id
-        WHERE p.is_active = 1
-        GROUP BY p.id
-        ORDER BY p.created_at DESC
-    ''')
-    problems = cursor.fetchall()
-    
-    cursor.execute('SELECT * FROM modules WHERE is_active = 1')
-    modules = cursor.fetchall()
-    
+
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        module_id = request.form['module_id']
+        title = request.form['title']
+        description = request.form['description']
+        difficulty = request.form['difficulty']
+        sample_input = request.form.get('sample_input', '')
+        sample_output = request.form.get('sample_output', '')
+        c.execute('''INSERT INTO problems (module_id, title, description, difficulty, sample_input, sample_output)
+                     VALUES (?, ?, ?, ?, ?, ?)''', (module_id, title, description, difficulty, sample_input, sample_output))
+        conn.commit()
+        flash('Problem added successfully', 'success')
+        return redirect(url_for('manage_problems'))
+
+    module_id = request.args.get('module')
+    if module_id:
+        c.execute('''SELECT p.*, m.name AS module_name,
+                     (SELECT COUNT(*) FROM test_cases WHERE problem_id = p.id) AS test_case_count
+                     FROM problems p
+                     JOIN modules m ON p.module_id = m.id
+                     WHERE p.module_id = ?
+                     ORDER BY p.created_at DESC''', (module_id,))
+        problems = c.fetchall()
+    else:
+        c.execute('''SELECT p.*, m.name AS module_name,
+                     (SELECT COUNT(*) FROM test_cases WHERE problem_id = p.id) AS test_case_count
+                     FROM problems p
+                     JOIN modules m ON p.module_id = m.id
+                     ORDER BY p.created_at DESC''')
+        problems = c.fetchall()
+
+    c.execute("SELECT * FROM modules ORDER BY name")
+    modules = c.fetchall()
     conn.close()
-    
     return render_template('manage_problems.html', problems=problems, modules=modules)
 
-@app.route('/admin/problems/add', methods=['POST'])
-def add_problem():
-    if session.get('role') != 'admin':
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO problems (module_id, title, description, difficulty, sample_input, sample_output)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (data['module_id'], data['title'], data['description'], 
-          data['difficulty'], data['sample_input'], data['sample_output']))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Problem added successfully'})
+@app.route('/manage_test_cases/<int:problem_id>', methods=['GET', 'POST'])
+def manage_test_cases(problem_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return redirect(url_for('login'))
 
-@app.route('/module/<int:module_id>/problems')
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        input_data = request.form['input']
+        expected_output = request.form['expected_output']
+        hidden = 'hidden' in request.form
+        c.execute('''INSERT INTO test_cases (problem_id, input, expected_output, hidden)
+                     VALUES (?, ?, ?, ?)''', (problem_id, input_data, expected_output, hidden))
+        conn.commit()
+        flash('Test case added successfully', 'success')
+        return redirect(url_for('manage_test_cases', problem_id=problem_id))
+
+    c.execute("SELECT * FROM problems WHERE id = ?", (problem_id,))
+    problem = c.fetchone()
+    if not problem:
+        flash('Problem not found', 'error')
+        return redirect(url_for('manage_problems'))
+
+    c.execute("SELECT * FROM test_cases WHERE problem_id = ? ORDER BY id", (problem_id,))
+    test_cases = c.fetchall()
+    conn.close()
+    return render_template('manage_test_cases.html', problem=problem, test_cases=test_cases)
+
+@app.route('/module_problems/<int:module_id>')
 def module_problems(module_id):
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT * FROM modules WHERE id = ? AND is_active = 1', (module_id,))
-    module = cursor.fetchone()
-    
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM modules WHERE id = ?", (module_id,))
+    module = c.fetchone()
     if not module:
         flash('Module not found', 'error')
         return redirect(url_for('student_dashboard'))
-    
-    cursor.execute('SELECT * FROM problems WHERE module_id = ? AND is_active = 1', (module_id,))
-    problems = cursor.fetchall()
-    
+    c.execute("SELECT * FROM problems WHERE module_id = ? ORDER BY difficulty", (module_id,))
+    problems = c.fetchall()
     conn.close()
-    
     return render_template('module_problems.html', module=module, problems=problems)
 
-@app.route('/problem/<int:problem_id>')
+@app.route('/solve_problem/<int:problem_id>', methods=['GET', 'POST'])
 def solve_problem(problem_id):
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT p.*, m.name as module_name
-        FROM problems p
-        LEFT JOIN modules m ON p.module_id = m.id
-        WHERE p.id = ? AND p.is_active = 1
-    ''', (problem_id,))
-    problem = cursor.fetchone()
-    
+
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM problems WHERE id = ?", (problem_id,))
+    problem = c.fetchone()
     if not problem:
         flash('Problem not found', 'error')
         return redirect(url_for('student_dashboard'))
-    
-    conn.close()
-    
-    return render_template('solve_problem.html', problem=problem)
 
-@app.route('/execute_code', methods=['POST'])
-def execute_code():
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    code = data.get('code')
-    language = data.get('language')
-    input_data = data.get('input', '')
-    
-    if language == 'python':
-        result = execute_python(code, input_data)
-    elif language == 'javascript':
-        result = execute_javascript(code, input_data)
-    elif language == 'java':
-        result = execute_java(code, input_data)
-    elif language == 'cpp':
-        result = execute_cpp(code, input_data)
-    else:
-        result = {'success': False, 'error': 'Unsupported language'}
-    
-    return jsonify(result)
+    c.execute("SELECT * FROM test_cases WHERE problem_id = ?", (problem_id,))
+    test_cases = c.fetchall()
 
-@app.route('/submit_solution', methods=['POST'])
-def submit_solution():
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Unauthorized'})
-    
-    data = request.json
-    problem_id = data.get('problem_id')
-    code = data.get('code')
-    language = data.get('language')
-    
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    
-    # Get test cases
-    cursor.execute('SELECT * FROM test_cases WHERE problem_id = ?', (problem_id,))
-    test_cases = cursor.fetchall()
-    
-    results = []
-    passed = 0
-    
-    for test_case in test_cases:
-        test_input = test_case[2]
-        expected_output = test_case[3].strip()
+    if request.method == 'POST':
+        code = request.form['code']
+        language = request.form['language']
+        user_id = session['user_id']
         
-        if language == 'python':
-            result = execute_python(code, test_input)
-        elif language == 'javascript':
-            result = execute_javascript(code, test_input)
-        elif language == 'java':
-            result = execute_java(code, test_input)
-        elif language == 'cpp':
-            result = execute_cpp(code, test_input)
-        else:
-            result = {'success': False, 'error': 'Unsupported language'}
+        # Prepare to run test cases and collect results
+        test_results = []
+        all_tests_passed = True
         
-        if result['success']:
-            actual_output = result['output'].strip()
-            test_passed = actual_output == expected_output
-            if test_passed:
-                passed += 1
+        for test_case in test_cases:
+            # Execute the code against the test case input
+            result = execute_code(code, language, test_case[2])  # test_case[2] is the input
             
-            results.append({
-                'test_case_id': test_case[0],
-                'passed': test_passed,
-                'expected': expected_output,
-                'actual': actual_output,
-                'error': None
-            })
+            # Check for execution errors
+            if result['error']:
+                all_tests_passed = False
+                test_results.append({
+                    'test_case_id': test_case[0],
+                    'status': 'error',
+                    'message': 'Execution Error: ' + result['error']
+                })
+                continue  # Skip to the next test case
+            
+            # Compare the output with the expected output
+            if result['output'].strip() == test_case[3].strip():  # test_case[3] is the expected output
+                test_results.append({
+                    'test_case_id': test_case[0],
+                    'status': 'passed',
+                    'message': 'Passed'
+                })
+            else:
+                all_tests_passed = False
+                test_results.append({
+                    'test_case_id': test_case[0],
+                    'status': 'failed',
+                    'message': 'Failed: Expected output:\n' + test_case[3] + '\nYour output:\n' + result['output']
+                })
+        
+        # Calculate the score based on the test results
+        if all_tests_passed:
+            score = 100
+            status = 'Accepted'
         else:
-            results.append({
-                'test_case_id': test_case[0],
-                'passed': False,
-                'expected': expected_output,
-                'actual': '',
-                'error': result['error']
-            })
-    
-    # Save submission
-    status = 'Accepted' if passed == len(test_cases) else 'Wrong Answer'
-    cursor.execute('''
-        INSERT INTO submissions (user_id, problem_id, code, language, status, test_results)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (session['user_id'], problem_id, code, language, status, json.dumps(results)))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'results': results,
-        'passed': passed,
-        'total': len(test_cases),
-        'status': status
-    })
+            score = sum(1 for res in test_results if res['status'] == 'passed') * (100 / len(test_cases))
+            status = 'Wrong Answer'
+        
+        # Insert the submission into the database
+        c.execute('''INSERT INTO submissions (user_id, problem_id, code, status, score)
+                     VALUES (?, ?, ?, ?, ?)''', (user_id, problem_id, code, status, score))
+        conn.commit()
+        
+        # Pass the test results to the template for display
+        return render_template('solve_problem.html', problem=problem, test_cases=test_cases,
+                               code=code, language=language, test_results=test_results)
 
-@app.route('/admin/test_cases/<int:problem_id>')
-def manage_test_cases(problem_id):
-    if session.get('role') != 'admin':
+    conn.close()
+    return render_template('solve_problem.html', problem=problem, test_cases=test_cases)
+
+# MCQ Management Routes
+@app.route('/manage_mcqs')
+def manage_mcqs():
+    if 'user_id' not in session or session['role'] != 'admin':
         return redirect(url_for('login'))
     
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
     
-    cursor.execute('SELECT * FROM problems WHERE id = ?', (problem_id,))
-    problem = cursor.fetchone()
+    # Get all MCQs with module names
+    c.execute('''SELECT m.*, md.name as module_name 
+                 FROM mcqs m 
+                 LEFT JOIN modules md ON m.module_id = md.id 
+                 ORDER BY m.created_at DESC''')
+    mcqs = c.fetchall()
     
-    cursor.execute('SELECT * FROM test_cases WHERE problem_id = ?', (problem_id,))
-    test_cases = cursor.fetchall()
+    # Get all modules for the form
+    c.execute('SELECT * FROM modules ORDER BY name')
+    modules = c.fetchall()
     
     conn.close()
     
-    return render_template('manage_test_cases.html', problem=problem, test_cases=test_cases)
+    return render_template('manage_mcqs.html', mcqs=mcqs, modules=modules)
 
-@app.route('/admin/test_cases/add', methods=['POST'])
-def add_test_case():
-    if session.get('role') != 'admin':
+@app.route('/add_mcq', methods=['POST'])
+def add_mcq():
+    if 'user_id' not in session or session['role'] != 'admin':
         return jsonify({'success': False, 'message': 'Unauthorized'})
     
-    data = request.json
+    try:
+        question = request.form['question']
+        option_a = request.form['option_a']
+        option_b = request.form['option_b']
+        option_c = request.form['option_c']
+        option_d = request.form['option_d']
+        correct_answer = request.form['correct_answer']
+        difficulty = request.form['difficulty']
+        module_id = request.form.get('module_id') or None
+        explanation = request.form.get('explanation', '')
+        
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        
+        c.execute('''INSERT INTO mcqs (question, option_a, option_b, option_c, option_d, 
+                     correct_answer, difficulty, module_id, explanation)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (question, option_a, option_b, option_c, option_d, 
+                   correct_answer, difficulty, module_id, explanation))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'MCQ added successfully'})
     
-    conn = sqlite3.connect('coding_platform.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO test_cases (problem_id, input_data, expected_output, is_hidden)
-        VALUES (?, ?, ?, ?)
-    ''', (data['problem_id'], data['input_data'], data['expected_output'], data.get('is_hidden', False)))
-    conn.commit()
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/delete_mcq/<int:mcq_id>', methods=['DELETE'])
+def delete_mcq(mcq_id):
+    if 'user_id' not in session or session['role'] != 'admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'})
+    
+    try:
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        
+        # Delete MCQ submissions first
+        c.execute('DELETE FROM mcq_submissions WHERE mcq_id = ?', (mcq_id,))
+        
+        # Delete MCQ
+        c.execute('DELETE FROM mcqs WHERE id = ?', (mcq_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'MCQ deleted successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+# Student MCQ Routes
+@app.route('/student_mcqs')
+def student_mcqs():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    
+    # Get all MCQs with module names
+    c.execute('''SELECT m.*, md.name as module_name 
+                 FROM mcqs m 
+                 LEFT JOIN modules md ON m.module_id = md.id 
+                 ORDER BY m.difficulty, m.created_at DESC''')
+    mcqs = c.fetchall()
+    
+    # Get all modules for filtering
+    c.execute('SELECT * FROM modules ORDER BY name')
+    modules = c.fetchall()
+    
     conn.close()
     
-    return jsonify({'success': True, 'message': 'Test case added successfully'})
+    return render_template('student_mcqs.html', mcqs=mcqs, modules=modules)
+
+@app.route('/submit_mcq_answer', methods=['POST'])
+def submit_mcq_answer():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        mcq_id = data['mcq_id']
+        selected_answer = data['answer']
+        user_id = session['user_id']
+        
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        
+        # Get the correct answer
+        c.execute('SELECT correct_answer FROM mcqs WHERE id = ?', (mcq_id,))
+        result = c.fetchone()
+        
+        if not result:
+            return jsonify({'success': False, 'message': 'MCQ not found'})
+        
+        correct_answer = result[0]
+        is_correct = selected_answer == correct_answer
+        
+        # Save the submission
+        c.execute('''INSERT INTO mcq_submissions (user_id, mcq_id, selected_answer, is_correct)
+                     VALUES (?, ?, ?, ?)''',
+                  (user_id, mcq_id, selected_answer, is_correct))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'correct': is_correct,
+            'correct_answer': correct_answer
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/get_user_submissions')
+def get_user_submissions():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not logged in'})
+    
+    try:
+        user_id = session['user_id']
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        
+        # Get recent submissions
+        c.execute('''SELECT s.*, p.title as problem_title 
+                     FROM submissions s 
+                     JOIN problems p ON s.problem_id = p.id 
+                     WHERE s.user_id = ? 
+                     ORDER BY s.submitted_at DESC 
+                     LIMIT 10''',
+                  (user_id,))
+        submissions = c.fetchall()
+        
+        # Convert to list of dictionaries
+        submissions_list = []
+        for sub in submissions:
+            submissions_list.append({
+                'problem_title': sub[7],  # problem_title from JOIN
+                'status': sub[4],         # status
+                'score': sub[5],          # score
+                'submitted_at': sub[6]    # submitted_at
+            })
+        
+        conn.close()
+        
+        return jsonify({'success': True, 'submissions': submissions_list})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+# Test all compilers endpoint
+@app.route('/test_compilers')
+def test_compilers():
+    if 'user_id' not in session or session['role'] != 'admin':
+        return redirect(url_for('login'))
+    
+    test_results = {}
+    
+    # Test Python
+    try:
+        result = execute_code('print("Python works!")', 'python', '')
+        test_results['python'] = {'status': 'success', 'output': result['output']}
+    except Exception as e:
+        test_results['python'] = {'status': 'error', 'error': str(e)}
+    
+    # Test JavaScript
+    try:
+        result = execute_code('console.log("JavaScript works!");', 'javascript', '')
+        test_results['javascript'] = {'status': 'success', 'output': result['output']}
+    except Exception as e:
+        test_results['javascript'] = {'status': 'error', 'error': str(e)}
+    
+    # Test Java
+    try:
+        java_code = '''
+public class Test {
+    public static void main(String[] args) {
+        System.out.println("Java works!");
+    }
+}'''
+        result = execute_code(java_code, 'java', '')
+        test_results['java'] = {'status': 'success', 'output': result['output']}
+    except Exception as e:
+        test_results['java'] = {'status': 'error', 'error': str(e)}
+    
+    # Test C++
+    try:
+        cpp_code = '''
+#include <iostream>
+using namespace std;
+int main() {
+    cout << "C++ works!" << endl;
+    return 0;
+}'''
+        result = execute_code(cpp_code, 'cpp', '')
+        test_results['cpp'] = {'status': 'success', 'output': result['output']}
+    except Exception as e:
+        test_results['cpp'] = {'status': 'error', 'error': str(e)}
+    
+    return jsonify(test_results)
 
 if __name__ == '__main__':
     init_db()
+    create_admin_user()
     app.run(debug=True)

@@ -33,4 +33,97 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Profile Modal -->
+<div id="profileModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>My Profile</h2>
+            <span class="close" onclick="closeModal('profileModal')">&times;</span>
+        </div>
+        <div class="profile-content">
+            <div class="profile-info">
+                <div class="info-item">
+                    <label>Full Name:</label>
+                    <span>{{ session.full_name }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Email:</label>
+                    <span>{{ session.email }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Role:</label>
+                    <span class="role-badge {{ session.role }}">{{ session.role.title() }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Submissions Modal -->
+<div id="submissionsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>My Submissions</h2>
+            <span class="close" onclick="closeModal('submissionsModal')">&times;</span>
+        </div>
+        <div class="submissions-content">
+            <div id="submissionsList">
+                <p>Loading submissions...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showProfile() {
+    document.getElementById('profileModal').style.display = 'block';
+}
+
+function showSubmissions() {
+    document.getElementById('submissionsModal').style.display = 'block';
+    loadSubmissions();
+}
+
+function loadSubmissions() {
+    fetch('/get_user_submissions')
+        .then(response => response.json())
+        .then(data => {
+            const submissionsList = document.getElementById('submissionsList');
+            if (data.submissions && data.submissions.length > 0) {
+                submissionsList.innerHTML = data.submissions.map(sub => `
+                    <div class="submission-item">
+                        <h4>${sub.problem_title}</h4>
+                        <p>Status: <span class="status ${sub.status.toLowerCase()}">${sub.status}</span></p>
+                        <p>Score: ${sub.score}%</p>
+                        <p>Submitted: ${new Date(sub.submitted_at).toLocaleString()}</p>
+                    </div>
+                `).join('');
+            } else {
+                submissionsList.innerHTML = '<p>No submissions found.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading submissions:', error);
+            document.getElementById('submissionsList').innerHTML = '<p>Error loading submissions.</p>';
+        });
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modals = ['profileModal', 'submissionsModal'];
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+}
+</script>
 {% endblock %}

@@ -1,0 +1,121 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage MCQs{% endblock %}
+
+{% block content %}
+<div class="management-container">
+    <div class="management-header">
+        <h1><i class="fas fa-question-circle"></i> Manage MCQs</h1>
+        <button class="btn btn-primary" onclick="openAddMCQModal()">
+            <i class="fas fa-plus"></i> Add MCQ
+        </button>
+    </div>
+    
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Question</th>
+                    <th>Module</th>
+                    <th>Difficulty</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mcq in mcqs %}
+                <tr>
+                    <td>{{ mcq[1][:50] }}...</td>
+                    <td>{{ mcq[7] or 'General' }}</td>
+                    <td><span class="difficulty-badge {{ mcq[6].lower() }}">{{ mcq[6] }}</span></td>
+                    <td>{{ mcq[8] }}</td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-outline" onclick="editMCQ({{ mcq[0] }})">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteMCQ({{ mcq[0] }})">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add MCQ Modal -->
+<div id="addMCQModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New MCQ</h2>
+            <span class="close" onclick="closeModal('addMCQModal')">&times;</span>
+        </div>
+        <form id="addMCQForm">
+            <div class="form-group">
+                <label for="mcq_question">Question</label>
+                <textarea id="mcq_question" name="question" rows="3" required></textarea>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="option_a">Option A</label>
+                    <input type="text" id="option_a" name="option_a" required>
+                </div>
+                <div class="form-group">
+                    <label for="option_b">Option B</label>
+                    <input type="text" id="option_b" name="option_b" required>
+                </div>
+                <div class="form-group">
+                    <label for="option_c">Option C</label>
+                    <input type="text" id="option_c" name="option_c" required>
+                </div>
+                <div class="form-group">
+                    <label for="option_d">Option D</label>
+                    <input type="text" id="option_d" name="option_d" required>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="correct_answer">Correct Answer</label>
+                    <select id="correct_answer" name="correct_answer" required>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mcq_difficulty">Difficulty</label>
+                    <select id="mcq_difficulty" name="difficulty" required>
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mcq_module">Module (Optional)</label>
+                    <select id="mcq_module" name="module_id">
+                        <option value="">General</option>
+                        {% for module in modules %}
+                        <option value="{{ module[0] }}">{{ module[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="explanation">Explanation (Optional)</label>
+                <textarea id="explanation" name="explanation" rows="2"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('addMCQModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add MCQ</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/mcqs.js') }}"></script>
+{% endblock %}
