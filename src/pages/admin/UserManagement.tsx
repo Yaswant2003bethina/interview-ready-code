@@ -35,17 +35,7 @@ export const UserManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      const typedUsers = data?.map(user => ({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role as 'admin' | 'student',
-        created_at: user.created_at
-      })) || [];
-      
-      setUsers(typedUsers);
+      setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
