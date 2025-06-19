@@ -62,7 +62,17 @@ export const MCQManagement = () => {
       if (error) throw error;
       
       const mcqsWithModuleName = data?.map(mcq => ({
-        ...mcq,
+        id: mcq.id,
+        question: mcq.question,
+        option_a: mcq.option_a,
+        option_b: mcq.option_b,
+        option_c: mcq.option_c,
+        option_d: mcq.option_d,
+        correct_answer: mcq.correct_answer as 'A' | 'B' | 'C' | 'D',
+        difficulty: mcq.difficulty as 'Easy' | 'Medium' | 'Hard',
+        module_id: mcq.module_id,
+        explanation: mcq.explanation,
+        created_at: mcq.created_at,
         module_name: mcq.modules?.name || 'General'
       })) || [];
       
@@ -243,7 +253,7 @@ export const MCQManagement = () => {
                       <SelectValue placeholder="Module (Optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">General</SelectItem>
+                      <SelectItem value="general">General</SelectItem>
                       {modules.map((module) => (
                         <SelectItem key={module.id} value={module.id}>{module.name}</SelectItem>
                       ))}
