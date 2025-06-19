@@ -14,7 +14,7 @@ import {
   LogOut, 
   Users, 
   Settings, 
-  Puzzle,
+  PuzzlePiece,
   HelpCircle,
   GraduationCap
 } from 'lucide-react'
@@ -103,7 +103,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                       }`}
                     >
-                      <Puzzle className="w-4 h-4 inline mr-2" />
+                      <PuzzlePiece className="w-4 h-4 inline mr-2" />
                       Problems
                     </Link>
                     
