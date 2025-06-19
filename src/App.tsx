@@ -1,107 +1,103 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { Navbar } from "@/components/Navbar";
-import { Login } from "@/pages/Login";
-import { AdminDashboard } from "@/pages/admin/Dashboard";
-import { StudentDashboard } from "@/pages/student/Dashboard";
-import { UserManagement } from "@/pages/admin/UserManagement";
-import { MCQManagement } from "@/pages/admin/MCQManagement";
 
-const queryClient = new QueryClient();
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { Toaster } from '@/components/ui/toaster'
+import { Login } from '@/components/Login'
+import { Layout } from '@/components/Layout'
+import { Dashboard } from '@/pages/Dashboard'
+import { MCQPractice } from '@/pages/MCQPractice'
+import { UserManagement } from '@/pages/admin/UserManagement'
+import { MCQManagement } from '@/pages/admin/MCQManagement'
 
-const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ 
+  children, 
+  adminOnly = false 
+}) => {
+  const { user, loading } = useAuth()
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" />
   }
 
-  if (!allowedRoles.includes(user.role)) {
-    return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} replace />;
+  if (adminOnly && user.role !== 'admin') {
+    return <Navigate to="/" />
   }
 
-  return <>{children}</>;
-};
+  return <Layout>{children}</Layout>
+}
 
-const AppRoutes = () => {
-  const { user, loading } = useAuth();
+const AppContent: React.FC = () => {
+  const { user, loading } = useAuth()
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} replace /> : <Login />} />
-        
-        {/* Admin Routes */}
-        <Route path="/admin/dashboard" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminDashboard />
+    <Routes>
+      <Route 
+        path="/login" 
+        element={user ? <Navigate to="/" /> : <Login />} 
+      />
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute>
+            <Dashboard />
           </ProtectedRoute>
-        } />
-        <Route path="/admin/users" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+        } 
+      />
+      <Route 
+        path="/mcqs" 
+        element={
+          <ProtectedRoute>
+            <MCQPractice />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/users" 
+        element={
+          <ProtectedRoute adminOnly>
             <UserManagement />
           </ProtectedRoute>
-        } />
-        <Route path="/admin/mcqs" element={
-          <ProtectedRoute allowedRoles={['admin']}>
+        } 
+      />
+      <Route 
+        path="/admin/mcqs" 
+        element={
+          <ProtectedRoute adminOnly>
             <MCQManagement />
           </ProtectedRoute>
-        } />
-        
-        {/* Student Routes */}
-        <Route path="/student/dashboard" element={
-          <ProtectedRoute allowedRoles={['student']}>
-            <StudentDashboard />
-          </ProtectedRoute>
-        } />
-        
-        {/* Default redirects */}
-        <Route path="/" element={
-          user ? (
-            <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        } />
-        
-        {/* Catch all route */}
-        <Route path="*" element={
-          user ? (
-            <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        } />
-      </Routes>
-    </div>
-  );
-};
+        } 
+      />
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  )
+}
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+        <Toaster />
+      </AuthProvider>
+    </Router>
+  )
+}
 
-export default App;
+export default App

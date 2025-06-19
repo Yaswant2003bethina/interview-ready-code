@@ -107,28 +107,24 @@ export type Database = {
           description: string | null
           id: string
           name: string
-          problem_count: number | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
           id?: string
           name: string
-          problem_count?: number | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
           id?: string
           name?: string
-          problem_count?: number | null
         }
         Relationships: []
       }
       problems: {
         Row: {
           created_at: string | null
-          created_by: string | null
           description: string
           difficulty: string
           id: string
@@ -139,7 +135,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          created_by?: string | null
           description: string
           difficulty: string
           id?: string
@@ -150,7 +145,6 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          created_by?: string | null
           description?: string
           difficulty?: string
           id?: string
@@ -160,13 +154,6 @@ export type Database = {
           title?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "problems_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "problems_module_id_fkey"
             columns: ["module_id"]
